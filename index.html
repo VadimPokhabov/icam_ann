@@ -76,8 +76,9 @@
            На отпускание шлём CONFIG.PTZ_ACT.stop. --- */
     let held = null;
     function ptz(act){
-      if (act == null) return;
-      fetch(CAM + "/ptzctrl?act=" + CONFIG.PTZ_ACT[act], { mode:"no-cors" }).catch(()=>{});
+        if (act == null) return;
+        const b = new Image();
+        b.src = CAM + "/ptzctrl?act=" + CONFIG.PTZ_ACT[act] + "&t=" + Date.now();
     }
     document.querySelectorAll("#pad .sector").forEach(b => {
       const act = b.dataset.act;
