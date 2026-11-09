@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#121417">
+    <link rel="stylesheet" href="style.css">
+    <title>Камера — живой просмотр</title>
+</head>
+<body>
+<header>
+    <h1>Камера 192.168.3.13</h1>
+    <div><span class="dot" id="dot"></span>
+        <span id="st">Проверяю…</span></div>
+</header>
+
+<div id="app">
+    <div id="view">
+        <img id="live" alt="Кадр камеры" draggable="false">
+    </div>
+</div>
+
+<div id="pad">
+    <div id="toolbar">
+        <button id="btnShot">Снимок</button>
+        <button id="btnFull">Полный экран</button>
+    </div>
+    <div id="dpad">
+        <button class="sector up" data-act="up" aria-label="Вверх"><i class="arr"></i></button>
+        <button class="sector down" data-act="down" aria-label="Вниз"><i class="arr"></i></button>
+        <button class="sector left" data-act="left" aria-label="Влево"><i class="arr"></i></button>
+        <button class="sector right" data-act="right" aria-label="Вправо"><i class="arr"></i></button>
+    </div>
+</div>
+
+<script>
+    /* ================== НАСТРОЙКИ  ================== */
+    const CONFIG = {
+      PTZ_ACT: { left:9, right:7, up:1, down:3, stop:0 },
+      SNAPSHOT_INTERVAL: matchMedia("(pointer:coarse)").matches ? 700 : 500,
+      BACKOFF_INTERVAL: 3000
+    };
+    /* Адрес камеры напрямую — страница с GitHub ходит к ней по Wi-Fi */
+    const CAM = "http://192.168.3.13:8001";
+    /* ====================================================================== */
+
+    const img = document.getElementById("live");
+    const dot = document.getElementById("dot");
+    const st  = document.getElementById("st");
+    let online = false;
+
+    function setStat(ok){
+      if (ok === online) return;
+      online = ok;
+      dot.className = "dot" + (ok ? " ok" : " bad");
+      st.textContent = ok ? "Онлайн" : "Офлайн";
+    }
+    function refresh(){
+      const probe = new Image();
+      probe.onload  = () => { img.src = probe.src; setStat(true); };
+      probe.onerror = () => setStat(false);
+      probe.src = CAM + "/snapshot?t=" + Date.now();
+    }
+    let timer = setInterval(refresh, CONFIG.SNAPSHOT_INTERVAL);
+    document.addEventListener("visibilitychange", () => {
+      clearInterval(timer);
+      timer = setInterval(refresh,
+        document.hidden ? CONFIG.BACKOFF_INTERVAL : CONFIG.SNAPSHOT_INTERVAL);
+      if (!document.hidden) refresh();
+    });
+    refresh();
+
+    /* --- PTZ: движение только пока кнопка удерживается.
+           На отпускание шлём CONFIG.PTZ_ACT.stop. --- */
+    let held = null;
+    function ptz(act){
+      if (act == null) return;
+      fetch(CAM + "/ptzctrl?act=" + CONFIG.PTZ_ACT[act], { mode:"no-cors" }).catch(()=>{});
+    }
+    document.querySelectorAll("#pad .sector").forEach(b => {
+      const act = b.dataset.act;
+      b.addEventListener("pointerdown", e => {
+        e.preventDefault();
+        held = act;
+        ptz(act);
+      });
+      const release = () => {
+        if (held !== act) return;
+        held = null;
+        ptz("stop");
+      };
+      b.addEventListener("pointerup",     release);
+      b.addEventListener("pointercancel", release);
+      b.addEventListener("pointerleave",  release);
+      b.addEventListener("contextmenu", e => e.preventDefault());
+    });
+
+    /* --- Снимок: открываем кадр в новой вкладке.
+          (CORS не даёт прочитать файл с чужого сайта, поэтому без скачивания) --- */
+    document.getElementById("btnShot").onclick = () => {
+      window.open(CAM + "/snapshot?t=" + Date.now(), "_blank");
+    };
+
+    /* --- Полный экран --- */
+    document.getElementById("btnFull").onclick = () => {
+      const v = document.getElementById("view");
+      if (document.fullscreenElement){ document.exitFullscreen(); return; }
+      if (v.requestFullscreen) v.requestFullscreen();
+      else document.documentElement.classList.toggle("ios-full");
+    };
+</script>
+</body>
+</html>
